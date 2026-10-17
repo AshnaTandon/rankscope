@@ -8,11 +8,10 @@ export default async function handler(req, res) {
     });
   }
 
-  const apiKey = process.env.SERPKITE_API_KEY;
-
+const apiKey = process.env.SERP_API_KEY;
   if (!apiKey) {
     return res.status(503).json({
-      error: "SERPKITE_API_KEY is not configured in Vercel."
+      error: "SERP_API_KEY is not configured in Vercel."
     });
   }
 
