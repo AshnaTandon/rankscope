@@ -1,0 +1,347 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Free Google Keyword Rank Checker | RankScope</title>
+<meta name="description" content="Check Google keyword rankings by city. Find your website's organic position and landing page URL.">
+<meta name="robots" content="index,follow">
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f7fb;color:#172033;font:16px Arial,sans-serif}
+header{background:#101a31;color:white;padding:24px max(20px,calc((100% - 1150px)/2))}
+header h1{margin:0 0 8px;font-size:30px}
+header p{color:#cbd5e1;margin:0}
+main{max-width:1150px;margin:28px auto;padding:0 16px}
+.layout{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.card{background:white;border:1px solid #e0e6ef;border-radius:14px;padding:22px;min-width:0}
+h2{margin-top:0;font-size:20px}
+label{display:block;font-weight:600;margin:15px 0 7px}
+input,textarea,select{width:100%;padding:12px;border:1px solid #ccd5e2;border-radius:8px;font:inherit;background:white}
+textarea{min-height:125px;resize:vertical}
+button{border:0;border-radius:8px;padding:12px 17px;background:#2459e0;color:white;font-weight:bold;cursor:pointer}
+button:disabled{opacity:.55;cursor:wait}
+.secondary{background:#e8edf7;color:#172033}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.muted{color:#64748b;font-size:13px;line-height:1.6}
+.notice{padding:12px;background:#eff5ff;border-radius:8px;margin-top:14px;overflow-wrap:anywhere}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{padding:14px;background:#f4f7fc;border-radius:9px;overflow-wrap:anywhere}
+.stat strong{display:block;font-size:22px;margin-top:6px}
+.table-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:720px}
+th,td{padding:12px;text-align:left;border-bottom:1px solid #e6eaf1}
+th{font-size:13px;color:#64748b}
+td a{overflow-wrap:anywhere}
+a{color:#2459e0}
+footer{max-width:1150px;margin:25px auto;padding:0 16px 30px;color:#64748b;font-size:13px}
+@media(max-width:760px){.layout{grid-template-columns:1fr}header h1{font-size:25px}.card{padding:16px}.stats{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+
+<body>
+<header>
+  <h1>RankScope</h1>
+  <p>Free Multi-City Google Keyword Rank Checker</p>
+</header>
+
+<main>
+<div class="layout">
+<section class="card">
+<h2>Check keyword rankings</h2>
+
+<label for="domain">Website domain</label>
+<input id="domain" placeholder="example.com">
+
+<label for="keywords">Keywords (up to 50)</label>
+<textarea id="keywords" placeholder="plumber toronto&#10;emergency plumber&#10;drain cleaning"></textarea>
+<p class="muted" id="keywordCount">0 unique keywords</p>
+
+<label for="cities">Target cities</label>
+<textarea id="cities" placeholder="Toronto, Canada&#10;Vancouver, Canada"></textarea>
+<p class="muted">One city per line. Format: City, Country.</p>
+
+<label for="depth">Ranking depth</label>
+<select id="depth">
+<option value="10">Top 10</option>
+<option value="100">Top 100</option>
+</select>
+
+<div class="actions">
+<button id="run">Check rankings</button>
+<button id="csv" class="secondary" disabled>Download CSV</button>
+</div>
+
+<div class="notice" id="message" role="status">Enter your details to get started.</div>
+</section>
+
+<section class="card">
+<h2>Ranking overview</h2>
+<div class="stats">
+<div class="stat">Total checks<strong id="total">0</strong></div>
+<div class="stat">Completed<strong id="completed">0</strong></div>
+<div class="stat">Current batch<strong id="progress">0%</strong></div>
+</div>
+<p class="muted">Live results require a configured ranking API. Results are not saved permanently in this first version.</p>
+<div class="notice">Position 1–10 = Page 1. Position 11–20 = Page 2.</div>
+</section>
+</div>
+
+<section class="card" style="margin-top:20px">
+<h2>Ranking results</h2>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Keyword</th>
+<th>City</th>
+<th>Position</th>
+<th>Page / Rank</th>
+<th>Landing page</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody id="results">
+<tr><td colspan="6">No results yet.</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="card" style="margin-top:20px">
+<h2>How it works</h2>
+<p>Enter your domain, keywords and target cities to check Google organic rankings. Results depend on the search provider, location, device and search depth.</p>
+<p class="muted">RankScope is an independent tool and is not affiliated with Google.</p>
+</section>
+</main>
+
+<footer>RankScope · Free keyword rank checking tool</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+let results = [];
+let running = false;
+
+function uniqueLines(text) {
+  return [...new Set(text.split("\n").map(x => x.trim()).filter(Boolean))];
+}
+
+function parseCities(text) {
+  const countries = {
+    "canada":"ca",
+    "united states":"us",
+    "usa":"us",
+    "india":"in",
+    "united kingdom":"gb",
+    "uk":"gb",
+    "australia":"au",
+    "new zealand":"nz",
+    "germany":"de",
+    "france":"fr",
+    "singapore":"sg",
+    "ireland":"ie",
+    "united arab emirates":"ae",
+    "uae":"ae",
+    "pakistan":"pk"
+  };
+
+  return text.split("\n").map(line => {
+    const parts = line.split(",");
+    const city = (parts.shift() || "").trim();
+    const countryName = parts.join(",").trim();
+
+    return {
+      city,
+      country: countries[countryName.toLowerCase()] || "",
+      countryName
+    };
+  }).filter(x => x.city && x.country);
+}
+
+$("keywords").addEventListener("input", () => {
+  $("keywordCount").textContent =
+    uniqueLines($("keywords").value).length + " unique keywords";
+});
+
+function addResult(r) {
+  const tr = document.createElement("tr");
+
+  const values = [
+    r.keyword,
+    r.city,
+    r.position ?? "—",
+    r.page ? `Page ${r.page} / #${r.positionOnPage}` : "—",
+    "",
+    r.status || "Unknown"
+  ];
+
+  values.forEach((value, index) => {
+    const td = document.createElement("td");
+
+    if (index === 4 && r.url) {
+      try {
+        const url = new URL(r.url);
+        if (!["https:", "http:"].includes(url.protocol)) {
+          throw new Error("Invalid URL");
+        }
+
+        const a = document.createElement("a");
+        a.href = url.href;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = url.hostname + url.pathname;
+        td.appendChild(a);
+      } catch {
+        td.textContent = "Invalid URL";
+      }
+    } else {
+      td.textContent = String(value);
+    }
+
+    tr.appendChild(td);
+  });
+
+  if (!results.length) $("results").replaceChildren();
+  $("results").appendChild(tr);
+}
+
+$("run").addEventListener("click", async () => {
+  if (running) return;
+
+  const domain = $("domain").value.trim();
+  const keywords = uniqueLines($("keywords").value);
+  const cities = parseCities($("cities").value);
+  const depth = Number($("depth").value);
+
+  if (!domain || !keywords.length || !cities.length) {
+    $("message").textContent =
+      "Enter a domain, keywords and valid City, Country locations.";
+    return;
+  }
+
+  if (keywords.length > 50) {
+    $("message").textContent = "Maximum 50 unique keywords allowed.";
+    return;
+  }
+
+  if (cities.length > 10) {
+    $("message").textContent = "Maximum 10 cities per batch.";
+    return;
+  }
+
+  if (cities.length === 0) {
+    $("message").textContent =
+      "Country not supported. Use a supported country name.";
+    return;
+  }
+
+  const jobs = keywords.flatMap(keyword =>
+    cities.map(city => ({keyword, ...city}))
+  );
+
+  if (!confirm(`Run ${jobs.length} keyword-location checks?`)) return;
+
+  running = true;
+  $("run").disabled = true;
+  $("csv").disabled = true;
+  $("total").textContent = jobs.length;
+  $("completed").textContent = "0";
+  $("progress").textContent = "0%";
+  $("results").replaceChildren();
+  results = [];
+
+  try {
+    for (let i = 0; i < jobs.length; i++) {
+      const job = jobs[i];
+
+      $("message").textContent =
+        `Checking ${i + 1}/${jobs.length}: ${job.keyword} — ${job.city}`;
+
+      try {
+        const response = await fetch("/api/rank", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({
+            domain,
+            keywords: [job.keyword],
+            cities: [{city:job.city, country:job.country}],
+            depth
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Ranking request failed");
+        }
+
+        const result = data.results?.[0];
+
+        if (!result) throw new Error("No result returned by API.");
+
+        results.push(result);
+        addResult(result);
+      } catch (error) {
+        const failed = {
+          keyword: job.keyword,
+          city: job.city,
+          position: null,
+          url: null,
+          status: error.message || "Check failed"
+        };
+
+        results.push(failed);
+        addResult(failed);
+
+        // Stop on quota or configuration errors rather than
+        // sending more requests that are likely to fail.
+        if (/credit|quota|API key|configured|unverifiable/i.test(failed.status)) {
+          break;
+        }
+      }
+
+      $("completed").textContent = results.length;
+      $("progress").textContent =
+        Math.round((i + 1) / jobs.length * 100) + "%";
+    }
+
+    $("message").textContent =
+      `Finished ${results.length} checks. Review each status.`;
+  } finally {
+    running = false;
+    $("run").disabled = false;
+    $("csv").disabled = results.length === 0;
+  }
+});
+
+$("csv").addEventListener("click", () => {
+  const cols = [
+    "keyword","city","position","page",
+    "positionOnPage","url","status","checkedAt"
+  ];
+
+  const quote = value =>
+    '"' + String(value ?? "").replace(/"/g, '""') + '"';
+
+  const csv = [
+    cols.map(quote).join(","),
+    ...results.map(row => cols.map(col => quote(row[col])).join(","))
+  ].join("\r\n");
+
+  const blob = new Blob(["\uFEFF" + csv], {
+    type: "text/csv;charset=utf-8"
+  });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "rankscope-results.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
