@@ -111,8 +111,9 @@ export default async function handler(req, res) {
       page: position ? Math.ceil(position / 10) : null,
       positionOnPage: position ? ((position - 1) % 10) + 1 : null,
       url: match?.link || null,
-      status: match ? "Found" : `Not found in Top ${depth}`,
-      checked: organic.length,
+      status: match ? "Found" : `Not found in Top ${depth} (checked ${organic.length} results)`,
+checked: organic.length,
+topResults: organic.slice(0, 5).map(o => o.link),
       creditsUsed: data.credits ?? 1,
       checkedAt: new Date().toISOString()
     };
