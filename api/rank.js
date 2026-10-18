@@ -1,3 +1,5 @@
+export const config = { maxDuration: 60 };
+
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
 
@@ -54,52 +56,74 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid keyword or city." });
     }
 
-    const payload = {
-      q: keyword,
-      gl: city.country.toLowerCase(),
-      hl: "en",
-      num: Number(depth)
-    };
-    if (city.countryName) {
-      payload.location = `${city.city}, ${city.countryName}`;
-    }
-
-    const response = await fetch("https://google.serper.dev/search", {
-      method: "POST",
-      headers: {
-        "X-API-KEY": apiKey,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(20000)
-    });
-
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok || data.error) {
-      console.error("Serper error:", response.status, data);
-      const msg =
-        data.message ||
-        (typeof data.error === "string" ? data.error : data.error?.message) ||
-        "Serper search request failed.";
-      return res
-        .status(response.status >= 400 && response.status < 600 ? response.status : 502)
-        .json({ error: msg });
-    }
-
-    const organic = Array.isArray(data.organic) ? data.organic : [];
     const target = hostInput.toLowerCase();
+    const maxPages = Number(depth) / 10; // Top 10 = 1 page, Top 100 = 10 pages
 
-    const match = organic.find(item => {
-      try {
-        const h = new URL(item.link).hostname.toLowerCase().replace(/^www\./, "");
-        return h === target || h.endsWith("." + target);
-      } catch {
-        return false;
+    let match = null;
+    let position = null;
+    let checked = 0;
+    let pagesUsed = 0;
+
+    for (let page = 1; page <= maxPages; page++) {
+      const payload = {
+        q: keyword,
+        gl: city.country.toLowerCase(),
+        hl: "en",
+        page
+      };
+
+      if (city.countryName) {
+        payload.location = `${city.city}, ${city.countryName}`;
       }
-    });
 
-    const position = match ? Number(match.position) : null;
+      const response = await fetch("https://google.serper.dev/search", {
+        method: "POST",
+        headers: {
+          "X-API-KEY": apiKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000)
+      });
+
+      const data = await response.json().catch(() => ({}));
+      pagesUsed++;
+
+      if (!response.ok || data.error) {
+        console.error("Serper error:", response.status, data);
+
+        const msg =
+          data.message ||
+          (typeof data.error === "string" ? data.error : data.error?.message) ||
+          "Serper search request failed.";
+
+        return res
+          .status(response.status >= 400 && response.status < 600 ? response.status : 502)
+          .json({ error: msg });
+      }
+
+      const organic = Array.isArray(data.organic) ? data.organic : [];
+      if (organic.length === 0) break; // no more results
+
+      for (const item of organic) {
+        checked++;
+        try {
+          const h = new URL(item.link).hostname
+            .toLowerCase()
+            .replace(/^www\./, "");
+
+          if (h === target || h.endsWith("." + target)) {
+            match = item;
+            position = checked; // running count across pages
+            break;
+          }
+        } catch {
+          // ignore bad URLs
+        }
+      }
+
+      if (match) break; // found it, stop spending credits
+    }
 
     const result = {
       mode: "live",
@@ -111,14 +135,14 @@ export default async function handler(req, res) {
       page: position ? Math.ceil(position / 10) : null,
       positionOnPage: position ? ((position - 1) % 10) + 1 : null,
       url: match?.link || null,
-      status: match ? "Found" : `Not found in Top ${depth} (checked ${organic.length} results)`,
-checked: organic.length,
-topResults: organic.slice(0, 5).map(o => o.link),
-      creditsUsed: data.credits ?? 1,
+      status: match
+        ? "Found"
+        : `Not found in Top ${depth} (checked ${checked} results)`,
+      checked,
+      creditsUsed: pagesUsed,
       checkedAt: new Date().toISOString()
     };
 
-    // Return in the shape the frontend expects
     return res.status(200).json({ results: [result] });
 
   } catch (error) {
